@@ -21,7 +21,7 @@ newline = '\n'
 ##################################
 
 
-def executePipeline(pipelineOfCommandsList, index, outputAppend):
+def executePipeline(pipelineOfCommands, outputAppend):
     # By default, do NOT consume the input of the parent.  It isn't insane to have
     # multiple processes pulling from STDIN of the parent process; it just doesn't
     # often make sense.
@@ -29,7 +29,7 @@ def executePipeline(pipelineOfCommandsList, index, outputAppend):
     lastOutput = None # By default, inherit parent's STDOUT.
     processList = []
 
-    pipeline = [ commandList[index] for commandList in pipelineOfCommandsList ]
+    pipeline = pipelineOfCommands.copy()
     logging.info("Executing: %s", pipeline)
     
     if len(pipeline[0]) == 1: # Input file
@@ -108,7 +108,7 @@ def waitForPipelineSize(processListList, targetSize):
             
         
 
-def xargs(pipelineOfCommandsList, concurrentPipelines, outputAppend=False):
+def xargs(listOfPipelinesOfCommands, concurrentPipelines, outputAppend=False):
 
     # A list of lists of processes?
     inProcessList = []
@@ -117,16 +117,16 @@ def xargs(pipelineOfCommandsList, concurrentPipelines, outputAppend=False):
     # Assume that all CommandsLists in the pipeline are the same length;
     # this is an error otherwise.  Also assumes we have access to the entire
     # input list; it is possible that we could implement with iterators later.
-    while nextPipeline < len(pipelineOfCommandsList[0]):
+    while nextPipeline < len(listOfPipelinesOfCommands):
 
         # Wait for enough processes to complete to bring the number of running
         # pipelines down to one less than the max.
         waitForPipelineSize(inProcessList, concurrentPipelines - 1)
 
 
-        while len(inProcessList) < concurrentPipelines and nextPipeline < len(pipelineOfCommandsList[0]):
+        while len(inProcessList) < concurrentPipelines and nextPipeline < len(listOfPipelinesOfCommands):
             logging.debug("Executing new pipeline number %s", nextPipeline)
-            inProcessList.append(executePipeline(pipelineOfCommandsList, nextPipeline, outputAppend))
+            inProcessList.append(executePipeline(listOfPipelinesOfCommands[nextPipeline], outputAppend))
             nextPipeline = nextPipeline + 1
 
     # Now we have put all of our commands into the pipeline, we just have to wait for them to finish.
@@ -145,19 +145,24 @@ def xargs(pipelineOfCommandsList, concurrentPipelines, outputAppend=False):
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+    '''
+    Possible input format:
+
+    file > program with arguments | other program with other arguments > outputFile
+    secondFile > third program arguments | blah blah blha | more stuff? > differentFile
+
+
+    Python input structure:
+    [
+        [ ['infile1',], ['grep','CCACTACTT',], ['fold','-w', '10',],  ['outfile1',],],
+        [ ['infile2',], ['grep','CCACTACTT',], ['fold','-w', '10',],  ['outfile2',],],
+    ]
+
+    '''
 
     xargs([
-        [
-            ['infile1'],   ['infile2'],
-        ],
-        [
-            ['grep','CCACTACTT',],      ['grep','CCACTACTT',],
-        ],
-        [
-            ['fold','-w', '10',],       ['fold','-w', '10',], 
-        ],
-        [
-            ['outfile1',], ['outfile2',],
-        ],
-    ], 1, outputAppend=False)
+        [ ['infile1',], ['grep','CCACTACTT',], ['fold','-w', '10',],  ['outfile1',],],
+        [ ['infile2',], ['grep','CCACTACTT',], ['fold','-w', '10',],  ['outfile2',],],
+    ] , 2, outputAppend=False)
     
+
